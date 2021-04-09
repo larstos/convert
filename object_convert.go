@@ -8,9 +8,9 @@ import (
 
 const default_tag = "json"
 
-//GetDataStructValue will use reflect to transfer interface to target type.
+//fillDataStructValue will use reflect to transfer interface to target type.
 func GetDataStructFilled(datatype reflect.Type, value interface{}, careTags ...string) (interface{}, error) {
-	ret, err := getDataStructValue(datatype, value, careTags...)
+	ret, err := fillDataStructValue(datatype, value, careTags...)
 	if err != nil {
 		return nil, err
 	}
@@ -52,65 +52,11 @@ func GetDataStructFilledWithMap(datatype reflect.Type, value map[string]interfac
 		}
 		vfield := datanewval.Field(i)
 		if vfield.CanSet() {
-			if ok {
-				switch tfield.Type.Kind() {
-				case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-					vfield.SetInt(MustInt64(value[tagFieldName]))
-				case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-					vfield.SetUint(uint64(MustInt64(value[tagFieldName])))
-				case reflect.String:
-					vfield.SetString(MustString(value[tagFieldName]))
-				case reflect.Bool:
-					vfield.SetBool(MustBool(value[tagFieldName]))
-				case reflect.Float64, reflect.Float32:
-					vfield.SetFloat(MustFloat64(value[tagFieldName]))
-				case reflect.Array, reflect.Slice:
-					list, ok := value[tagFieldName].([]interface{})
-					if !ok {
-						return nil, fmt.Errorf("data type not valid,data type=%v,field name=%v,type=%v,result=%s", datatype, tfield.Name, tfield.Type.String(), value[tagFieldName])
-					}
-					val := reflect.Zero(tfield.Type)
-					elem := tfield.Type.Elem()
-					for _, i2 := range list {
-						interval, err := getDataStructValue(elem, i2, tag)
-						if err != nil {
-							return nil, fmt.Errorf("data type not valid,data type=%v,field name=%v,type=%v,result=%s", datatype, tfield.Name, tfield.Type.String(), value[tagFieldName])
-						}
-						val = reflect.Append(val, interval)
-					}
-					vfield.Set(val)
-				case reflect.Ptr, reflect.Struct:
-					val, ok := value[tagFieldName].(map[string]interface{})
-					if !ok {
-						return nil, fmt.Errorf("data type not valid,data type=%v,field name=%v,type=%v,result=%s", datatype, tfield.Name, tfield.Type.String(), value[tagFieldName])
-					}
-					inner, err := getDataStructValue(tfield.Type, val, tag)
-					if err != nil {
-						return nil, err
-					}
-					vfield.Set(inner)
-				case reflect.Map:
-					innermap, ok := value[tagFieldName].(map[string]interface{})
-					if !ok {
-						return nil, fmt.Errorf("data type not valid,data type=%v,field name=%v,type=%v,result=%s", datatype, tfield.Name, tfield.Type.String(), value[tagFieldName])
-					}
-					keytype := tfield.Type.Key()
-					valtype := tfield.Type.Elem()
-					for k, i2 := range innermap {
-						innerkey, err := getDataStructValue(keytype, k, tag)
-						if err != nil {
-							return nil, fmt.Errorf("data type not valid,data type=%v,field name=%v,type=%v,result=%s", datatype, tfield.Name, tfield.Type.String(), value[tagFieldName])
-						}
-						innervalue, err := getDataStructValue(valtype, i2, tag)
-						if err != nil {
-							return nil, fmt.Errorf("data type not valid,data type=%v,field name=%v,type=%v,result=%s", datatype, tfield.Name, tfield.Type.String(), value[tagFieldName])
-						}
-						vfield.SetMapIndex(innerkey, innervalue)
-					}
-				default:
-					return nil, fmt.Errorf("find unsupport result,data type=%v,field name=%v,type=%v,result=%s", datatype, tfield.Name, tfield.Type.String(), value[tagFieldName])
-				}
+			value, err := fillDataStructValue(tfield.Type, value[tagFieldName], tag)
+			if err != nil {
+				return nil, fmt.Errorf("[error] error parse %s,err:%v", tagFieldName, err)
 			}
+			vfield.Set(value)
 		} else {
 			return nil, fmt.Errorf("data type=%v, %v can not be set", datatype, tagFieldName)
 		}
@@ -121,12 +67,18 @@ func GetDataStructFilledWithMap(datatype reflect.Type, value map[string]interfac
 	return datanew.Interface(), nil
 }
 
-func getDataStructValue(datatype reflect.Type, value interface{}, careTags ...string) (reflect.Value, error) {
+func fillDataStructValue(datatype reflect.Type, value interface{}, careTags ...string) (reflect.Value, error) {
+	var panicerr error
+	defer func() {
+		if err := recover(); err != nil {
+			panicerr = fmt.Errorf("%v", err)
+		}
+	}()
+	ret := reflect.New(datatype).Elem()
 	tag := default_tag
 	if len(careTags) > 0 {
 		tag = careTags[0]
 	}
-	ret := reflect.New(datatype).Elem()
 	switch datatype.Kind() {
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		ret.SetInt(MustInt64(value))
@@ -154,15 +106,37 @@ func getDataStructValue(datatype reflect.Type, value interface{}, careTags ...st
 			return reflect.Zero(datatype), errors.New("data type not valid")
 		}
 		elem := datatype.Elem()
+		ret = reflect.MakeSlice(datatype, 0, len(list))
 		for _, i2 := range list {
-			interval, err := getDataStructValue(elem, i2, tag)
+			interval, err := fillDataStructValue(elem, i2, tag)
 			if err != nil {
 				return reflect.Zero(datatype), errors.New("data type not valid")
 			}
 			ret = reflect.Append(ret, interval)
 		}
+	case reflect.Map:
+		innermap, ok := value.(map[string]interface{})
+		if !ok {
+			return reflect.Zero(datatype), errors.New("data type not valid")
+		}
+		keytype := datatype.Key()
+		valtype := datatype.Elem()
+		for k, i2 := range innermap {
+			if keytype.Kind() != reflect.String {
+				return reflect.Zero(datatype), errors.New("data type not valid,err: map key should be string type")
+			}
+			innerkey := reflect.ValueOf(k)
+			//fill value
+			innervalue, err := fillDataStructValue(valtype, i2, tag)
+			if err != nil {
+				return reflect.Zero(datatype), fmt.Errorf("data type not valid,value:%v,err:%v", value, err)
+			}
+			ret.SetMapIndex(innerkey, innervalue)
+		}
+	case reflect.Interface:
+		ret = reflect.ValueOf(value)
 	default:
-		return reflect.Zero(datatype), errors.New("unsupported type")
+		return ret, errors.New("unsupported type")
 	}
-	return ret, nil
+	return ret, panicerr
 }
