@@ -12,7 +12,7 @@ Just a tool package support transfer interface to specific type in go.
 package main
 
 import (
-	"github.com/larstos/convert_pkg"
+	"github.com/larstos/convert"
 )
 
 type Student struct {
