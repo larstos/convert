@@ -1,4 +1,4 @@
-package convert_pkg
+package convert
 
 import (
 	"encoding/json"

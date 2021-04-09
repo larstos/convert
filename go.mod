@@ -1,4 +1,4 @@
-module github.com/larstos/convert_pkg
+module github.com/larstos/convert
 
 go 1.16
 
