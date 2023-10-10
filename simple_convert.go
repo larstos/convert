@@ -6,7 +6,7 @@ import (
 	"strconv"
 )
 
-func MustString(v interface{}, defaultval ...string) string {
+func MustString(v any, defaultval ...string) string {
 	val, ok := TryString(v)
 	if ok {
 		return val
@@ -17,7 +17,7 @@ func MustString(v interface{}, defaultval ...string) string {
 	return ""
 }
 
-func TryString(v interface{}) (string, bool) {
+func TryString(v any) (string, bool) {
 	switch tv := v.(type) {
 	case string:
 		return tv, true
@@ -57,7 +57,7 @@ func TryString(v interface{}) (string, bool) {
 	return "", false
 }
 
-func MustInt64(v interface{}, defaultval ...int64) int64 {
+func MustInt64(v any, defaultval ...int64) int64 {
 	var defaultValue int64 = 0
 	if len(defaultval) > 0 {
 		defaultValue = defaultval[0]
@@ -84,7 +84,7 @@ func MustInt64(v interface{}, defaultval ...int64) int64 {
 	return defaultValue
 }
 
-func TryInt64(v interface{}) (int64, bool) {
+func TryInt64(v any) (int64, bool) {
 	if v == nil {
 		return -1, false
 	}
@@ -131,7 +131,7 @@ func TryInt64(v interface{}) (int64, bool) {
 	return -1, false
 }
 
-func MustFloat64(v interface{}, defaultval ...float64) float64 {
+func MustFloat64(v any, defaultval ...float64) float64 {
 	val, ok := TryFloat64(v)
 	if ok {
 		return val
@@ -142,7 +142,7 @@ func MustFloat64(v interface{}, defaultval ...float64) float64 {
 	return 0
 }
 
-func TryFloat64(v interface{}) (float64, bool) {
+func TryFloat64(v any) (float64, bool) {
 	if v == nil {
 		return 0, false
 	}
@@ -190,7 +190,7 @@ func TryFloat64(v interface{}) (float64, bool) {
 	return 0, false
 }
 
-func MustBool(v interface{}, defaultval ...bool) bool {
+func MustBool(v any, defaultval ...bool) bool {
 	val, ok := TryBool(v)
 	if ok {
 		return val
@@ -201,7 +201,7 @@ func MustBool(v interface{}, defaultval ...bool) bool {
 	return false
 }
 
-func TryBool(v interface{}) (ret bool, isbool bool) {
+func TryBool(v any) (ret bool, isbool bool) {
 	if v == nil {
 		return false, false
 	}

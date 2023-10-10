@@ -8,58 +8,54 @@ import (
 
 const default_tag = "json"
 
-//fillDataStructValue will use reflect to transfer interface to target type.
-func GetDataStructFilled(datatype reflect.Type, value interface{}, careTags ...string) (interface{}, error) {
-	ret, err := fillDataStructValue(datatype, value, careTags...)
+// GetDataStructFilled will use reflect to transfer interface to target type.
+func GetDataStructFilled(datatype reflect.Type, value any, tagName ...string) (any, error) {
+	ret, err := fillDataStructValue(datatype, value, tagName...)
 	if err != nil {
 		return nil, err
 	}
 	return ret.Interface(), err
 }
 
-//GetDataStructFilledWithMap fill value depends on map record.
-//Func will ignore fields :
+// GetDataStructFilledWithMap fill value depends on map record.
+// Func will ignore fields :
 // 1. tag is "-" or tag is empty
 // 2. field not accessible
 // 3. field not been set in map
-func GetDataStructFilledWithMap(datatype reflect.Type, value map[string]interface{}, careTags ...string) (interface{}, error) {
+func GetDataStructFilledWithMap(datatype reflect.Type, value map[string]any, careTags ...string) (any, error) {
 	tag := default_tag
 	if len(careTags) > 0 {
 		tag = careTags[0]
 	}
-	var datanew reflect.Value
 	operateDataType := datatype
 	if datatype.Kind() == reflect.Ptr {
 		operateDataType = datatype.Elem()
 	}
-	datanew = reflect.New(operateDataType)
-	numField := operateDataType.NumField()
+	datanew := reflect.New(operateDataType)
 	datanewval := datanew.Elem()
-	for i := 0; i < numField; i++ {
+	for i := 0; i < operateDataType.NumField(); i++ {
 		var ok bool
 		tfield := operateDataType.Field(i)
 		if len(tfield.PkgPath) > 0 {
-			return nil, fmt.Errorf("data type=%v,field %s is not public", datatype, tfield.Name)
+			continue
 		}
 		tagFieldName := tfield.Tag.Get(tag)
-		if len(tagFieldName) == 0 || tagFieldName == "-" {
+		if tagFieldName == "" || tagFieldName == "-" {
 			continue
-		} else {
-			_, ok = value[tagFieldName]
-			if !ok {
-				continue
-			}
+		}
+		rawVal, ok := value[tagFieldName]
+		if !ok {
+			continue
 		}
 		vfield := datanewval.Field(i)
-		if vfield.CanSet() {
-			value, err := fillDataStructValue(tfield.Type, value[tagFieldName], tag)
-			if err != nil {
-				return nil, fmt.Errorf("[error] error parse %s,err:%v", tagFieldName, err)
-			}
-			vfield.Set(value)
-		} else {
-			return nil, fmt.Errorf("data type=%v, %v can not be set", datatype, tagFieldName)
+		if !vfield.CanSet() {
+			continue
 		}
+		value, err := fillDataStructValue(tfield.Type, rawVal, tag)
+		if err != nil {
+			return nil, fmt.Errorf("[error] error parse %s,err:%v", tagFieldName, err)
+		}
+		vfield.Set(value)
 	}
 	if datatype.Kind() != reflect.Ptr {
 		return datanew.Elem().Interface(), nil
@@ -67,17 +63,16 @@ func GetDataStructFilledWithMap(datatype reflect.Type, value map[string]interfac
 	return datanew.Interface(), nil
 }
 
-func fillDataStructValue(datatype reflect.Type, value interface{}, careTags ...string) (reflect.Value, error) {
-	var panicerr error
+func fillDataStructValue(datatype reflect.Type, value any, tagName ...string) (val reflect.Value, err error) {
 	defer func() {
-		if err := recover(); err != nil {
-			panicerr = fmt.Errorf("%v", err)
+		if p := recover(); p != nil {
+			err = fmt.Errorf("[painc]%v", p)
 		}
 	}()
 	ret := reflect.New(datatype).Elem()
 	tag := default_tag
-	if len(careTags) > 0 {
-		tag = careTags[0]
+	if len(tagName) > 0 {
+		tag = tagName[0]
 	}
 	switch datatype.Kind() {
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
@@ -91,7 +86,7 @@ func fillDataStructValue(datatype reflect.Type, value interface{}, careTags ...s
 	case reflect.Float64, reflect.Float32:
 		ret.SetFloat(MustFloat64(value))
 	case reflect.Ptr, reflect.Struct:
-		val, ok := value.(map[string]interface{})
+		val, ok := value.(map[string]any)
 		if !ok {
 			return reflect.Zero(datatype), errors.New("data type not valid")
 		}
@@ -101,7 +96,7 @@ func fillDataStructValue(datatype reflect.Type, value interface{}, careTags ...s
 		}
 		return reflect.ValueOf(inner), nil
 	case reflect.Array, reflect.Slice:
-		list, ok := value.([]interface{})
+		list, ok := value.([]any)
 		if !ok {
 			return reflect.Zero(datatype), errors.New("data type not valid")
 		}
@@ -115,7 +110,7 @@ func fillDataStructValue(datatype reflect.Type, value interface{}, careTags ...s
 			ret = reflect.Append(ret, interval)
 		}
 	case reflect.Map:
-		innermap, ok := value.(map[string]interface{})
+		innermap, ok := value.(map[string]any)
 		if !ok {
 			return reflect.Zero(datatype), errors.New("data type not valid")
 		}
@@ -138,5 +133,5 @@ func fillDataStructValue(datatype reflect.Type, value interface{}, careTags ...s
 	default:
 		return ret, errors.New("unsupported type")
 	}
-	return ret, panicerr
+	return ret, nil
 }
