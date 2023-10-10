@@ -8,21 +8,34 @@ import (
 
 const default_tag = "json"
 
-// GetDataStructFilled will use reflect to transfer interface to target type.
-func GetDataStructFilled(datatype reflect.Type, value any, tagName ...string) (any, error) {
-	ret, err := fillDataStructValue(datatype, value, tagName...)
+// NewDataStructFilled will use reflect to transfer interface to target type.
+func NewDataStructFilled(datatype reflect.Type, value any, tagName ...string) (any, error) {
+	datanew := reflect.New(datatype).Elem()
+	err := fillDataStructValue(datanew, value, tagName...)
 	if err != nil {
 		return nil, err
 	}
-	return ret.Interface(), err
+	return datanew.Interface(), nil
 }
 
-// GetDataStructFilledWithMap fill value depends on map record.
+func GetDataStructFilled(input, value any, tagName ...string) error {
+	datanew := reflect.ValueOf(input)
+	if datanew.Type().Kind() != reflect.Ptr {
+		return fmt.Errorf("%v is not a pointer", input)
+	}
+	err := fillDataStructValue(datanew.Elem(), value, tagName...)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// NewDataStructFilledWithMap fill value depends on map record.
 // Func will ignore fields :
 // 1. tag is "-" or tag is empty
 // 2. field not accessible
 // 3. field not been set in map
-func GetDataStructFilledWithMap(datatype reflect.Type, value map[string]any, careTags ...string) (any, error) {
+func NewDataStructFilledWithMap(datatype reflect.Type, value map[string]any, careTags ...string) (any, error) {
 	tag := default_tag
 	if len(careTags) > 0 {
 		tag = careTags[0]
@@ -51,11 +64,10 @@ func GetDataStructFilledWithMap(datatype reflect.Type, value map[string]any, car
 		if !vfield.CanSet() {
 			continue
 		}
-		value, err := fillDataStructValue(tfield.Type, rawVal, tag)
+		err := fillDataStructValue(vfield, rawVal, tag)
 		if err != nil {
 			return nil, fmt.Errorf("[error] error parse %s,err:%v", tagFieldName, err)
 		}
-		vfield.Set(value)
 	}
 	if datatype.Kind() != reflect.Ptr {
 		return datanew.Elem().Interface(), nil
@@ -63,75 +75,76 @@ func GetDataStructFilledWithMap(datatype reflect.Type, value map[string]any, car
 	return datanew.Interface(), nil
 }
 
-func fillDataStructValue(datatype reflect.Type, value any, tagName ...string) (val reflect.Value, err error) {
+func fillDataStructValue(dataVal reflect.Value, raw any, tagName ...string) (err error) {
 	defer func() {
 		if p := recover(); p != nil {
 			err = fmt.Errorf("[painc]%v", p)
 		}
 	}()
-	ret := reflect.New(datatype).Elem()
+	dataType := dataVal.Type()
 	tag := default_tag
 	if len(tagName) > 0 {
 		tag = tagName[0]
 	}
-	switch datatype.Kind() {
+	switch dataType.Kind() {
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		ret.SetInt(MustInt64(value))
+		dataVal.SetInt(MustInt64(raw))
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		ret.SetUint(uint64(MustInt64(value)))
+		dataVal.SetUint(uint64(MustInt64(raw)))
 	case reflect.String:
-		ret.SetString(MustString(value))
+		dataVal.SetString(MustString(raw))
 	case reflect.Bool:
-		ret.SetBool(MustBool(value))
+		dataVal.SetBool(MustBool(raw))
 	case reflect.Float64, reflect.Float32:
-		ret.SetFloat(MustFloat64(value))
+		dataVal.SetFloat(MustFloat64(raw))
 	case reflect.Ptr, reflect.Struct:
-		val, ok := value.(map[string]any)
+		val, ok := raw.(map[string]any)
 		if !ok {
-			return reflect.Zero(datatype), errors.New("data type not valid")
+			return errors.New("data type not valid")
 		}
-		inner, err := GetDataStructFilledWithMap(datatype, val, tag)
+		inner, err := NewDataStructFilledWithMap(dataType, val, tag)
 		if err != nil {
-			return reflect.Zero(datatype), err
+			return err
 		}
-		return reflect.ValueOf(inner), nil
+		dataVal.Set(reflect.ValueOf(inner))
 	case reflect.Array, reflect.Slice:
-		list, ok := value.([]any)
+		list, ok := raw.([]any)
 		if !ok {
-			return reflect.Zero(datatype), errors.New("data type not valid")
+			return errors.New("data type not valid")
 		}
-		elem := datatype.Elem()
-		ret = reflect.MakeSlice(datatype, 0, len(list))
+		tList := reflect.MakeSlice(dataType, 0, len(list))
 		for _, i2 := range list {
-			interval, err := fillDataStructValue(elem, i2, tag)
+			tmpVal := reflect.New(dataType.Elem())
+			err := fillDataStructValue(tmpVal, i2, tag)
 			if err != nil {
-				return reflect.Zero(datatype), errors.New("data type not valid")
+				return err
 			}
-			ret = reflect.Append(ret, interval)
+			tList = reflect.Append(tList, tmpVal)
 		}
+		dataVal.Set(tList)
 	case reflect.Map:
-		innermap, ok := value.(map[string]any)
+		innermap, ok := raw.(map[string]any)
 		if !ok {
-			return reflect.Zero(datatype), errors.New("data type not valid")
+			return errors.New("data type not valid")
 		}
-		keytype := datatype.Key()
-		valtype := datatype.Elem()
+		tmap := reflect.MakeMapWithSize(dataType, len(innermap))
+		keytype := dataType.Key()
 		for k, i2 := range innermap {
 			if keytype.Kind() != reflect.String {
-				return reflect.Zero(datatype), errors.New("data type not valid,err: map key should be string type")
+				return errors.New("data type not valid,err: map key should be string type")
 			}
-			innerkey := reflect.ValueOf(k)
-			//fill value
-			innervalue, err := fillDataStructValue(valtype, i2, tag)
+			tmpVal := reflect.New(dataType.Elem())
+			err := fillDataStructValue(tmpVal, i2, tag)
 			if err != nil {
-				return reflect.Zero(datatype), fmt.Errorf("data type not valid,value:%v,err:%v", value, err)
+				return fmt.Errorf("data type not valid,value:%v,err:%v", raw, err)
 			}
-			ret.SetMapIndex(innerkey, innervalue)
+			tmap.SetMapIndex(reflect.ValueOf(k), tmpVal)
 		}
+		dataVal.Set(tmap)
 	case reflect.Interface:
-		ret = reflect.ValueOf(value)
+		dataVal.Set(reflect.ValueOf(raw))
 	default:
-		return ret, errors.New("unsupported type")
+		return errors.New("unsupported type")
 	}
-	return ret, nil
+	return nil
 }

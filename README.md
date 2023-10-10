@@ -34,7 +34,7 @@ func main() {
             "class_number":2,
         },
     }
-    ret, err := convert_pkg.GetDataStructFilled(reflect.TypeOf(Student{}),data )
+    ret, err := convert.NewDataStructFilled(reflect.TypeOf(Student{}),data )
     if err != nil {
     	// error handler
     }

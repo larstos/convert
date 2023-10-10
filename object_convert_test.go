@@ -24,7 +24,7 @@ func TestGetDataStructFilled(t *testing.T) {
 				"class_number": 2,
 			},
 		}
-		ret, err := GetDataStructFilled(reflect.TypeOf(Student{}), data)
+		ret, err := NewDataStructFilled(reflect.TypeOf(Student{}), data)
 		So(err, ShouldBeNil)
 		So(ret, ShouldResemble, Student{
 			Name: "xiaoming",
@@ -33,7 +33,22 @@ func TestGetDataStructFilled(t *testing.T) {
 				ClassNumber: 2,
 			},
 		})
-
+		// 已有对象直接填充
+		info := &Student{}
+		err = GetDataStructFilled(info, data)
+		So(err, ShouldBeNil)
+		So(info, ShouldResemble, &Student{
+			Name: "xiaoming",
+			Class: &Class{
+				Grade:       "first",
+				ClassNumber: 2,
+			},
+		})
+		// 对特殊对象进行填充
+		num := new(int64)
+		err = GetDataStructFilled(num, 2)
+		So(err, ShouldBeNil)
+		So(*num, ShouldEqual, 2)
 	})
 	Convey("test get data struct field fill type will not change", t, func() {
 		Convey("test struct and pointer", func() {
@@ -41,13 +56,13 @@ func TestGetDataStructFilled(t *testing.T) {
 				Name string `json:"name"`
 			}
 			//struct
-			ret, err := GetDataStructFilled(reflect.TypeOf(unNameStruct{}), map[string]interface{}{"name": 1})
+			ret, err := NewDataStructFilled(reflect.TypeOf(unNameStruct{}), map[string]interface{}{"name": 1})
 			So(err, ShouldBeNil)
 			So(ret, ShouldResemble, unNameStruct{
 				Name: "1",
 			})
 			//pointer
-			ret, err = GetDataStructFilled(reflect.TypeOf(&unNameStruct{}), map[string]interface{}{"name": 1})
+			ret, err = NewDataStructFilled(reflect.TypeOf(&unNameStruct{}), map[string]interface{}{"name": 1})
 			So(err, ShouldBeNil)
 			So(ret, ShouldResemble, &unNameStruct{
 				Name: "1",

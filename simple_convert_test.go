@@ -9,7 +9,7 @@ import (
 func TestMustString(t *testing.T) {
 	Convey("Given some case for string transfer", t, func() {
 		type unNameStruct struct {
-			name string
+			Name string
 		}
 		defaultval := "default"
 		Convey("support transfer type", func() {

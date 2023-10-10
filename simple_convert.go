@@ -6,7 +6,7 @@ import (
 	"strconv"
 )
 
-func MustString(v any, defaultval ...string) string {
+func MustString(v interface{}, defaultval ...string) string {
 	val, ok := TryString(v)
 	if ok {
 		return val
@@ -17,7 +17,7 @@ func MustString(v any, defaultval ...string) string {
 	return ""
 }
 
-func TryString(v any) (string, bool) {
+func TryString(v interface{}) (string, bool) {
 	switch tv := v.(type) {
 	case string:
 		return tv, true
@@ -57,7 +57,7 @@ func TryString(v any) (string, bool) {
 	return "", false
 }
 
-func MustInt64(v any, defaultval ...int64) int64 {
+func MustInt64(v interface{}, defaultval ...int64) int64 {
 	var defaultValue int64 = 0
 	if len(defaultval) > 0 {
 		defaultValue = defaultval[0]
@@ -148,13 +148,13 @@ func TryFloat64(v any) (float64, bool) {
 	}
 	switch tv := v.(type) {
 	case []byte:
-		res, err := strconv.ParseFloat(string(tv), 0)
+		res, err := strconv.ParseFloat(string(tv), 64)
 		if err != nil {
 			return 0, false
 		}
 		return res, true
 	case string:
-		res, err := strconv.ParseFloat(tv, 0)
+		res, err := strconv.ParseFloat(tv, 64)
 		if err != nil {
 			return 0, false
 		}
